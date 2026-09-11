@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention Visualiser — BERT · BioBERT · CLIP</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  /* ── Reset & base ─────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ───────────────────────────────────── */
+  header {
+    background: #1a1d27;
+    border-bottom: 1px solid #2d3148;
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 { font-size: 1.2rem; font-weight: 600; color: #7c83fd; }
+  header p  { font-size: 0.8rem; color: #888; }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+
+  /* ── Controls ─────────────────────────────────── */
+  .controls {
+    background: #1a1d27;
+    border: 1px solid #2d3148;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 24px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto;
+    gap: 12px;
+    align-items: end;
+  }
+
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  input[type="text"], select {
+    background: #0f1117;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    color: #e0e0e0;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus, select:focus { border-color: #7c83fd; }
+  input[type="text"] { width: 100%; min-width: 300px; }
+
+  button {
+    background: #7c83fd;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  button:hover { background: #5c63e0; }
+  button:disabled { background: #444; cursor: default; }
+
+  /* ── Tabs ─────────────────────────────────────── */
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #2d3148;
+    padding-bottom: 0;
+  }
+  .tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #888;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    border-radius: 0;
+  }
+  .tab.active { color: #7c83fd; border-bottom-color: #7c83fd; }
+  .tab:hover  { color: #e0e0e0; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ── Cards ────────────────────────────────────── */
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2d3148;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 { font-size: 0.9rem; color: #7c83fd; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ── Token bar (CLS attention) ────────────────── */
+  .token-bars { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .token-bar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .token-label {
+    font-size: 0.72rem;
+    font-family: monospace;
+    color: #ccc;
+    max-width: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .token-bar-fill {
+    width: 36px;
+    background: #2d3148;
+    border-radius: 3px;
+    overflow: hidden;
+    height: 60px;
+    display: flex;
+    align-items: flex-end;
+  }
+  .token-bar-fill-inner {
+    width: 100%;
+    border-radius: 3px;
+    transition: height 0.3s, background 0.3s;
+  }
+
+  /* ── Heatmap ──────────────────────────────────── */
+  .heatmap-container {
+    overflow-x: auto;
+  }
+  #heatmap-svg { display: block; }
+
+  /* ── Arc diagram ──────────────────────────────── */
+  #arc-svg { display: block; width: 100%; }
+
+  /* ── Compare ──────────────────────────────────── */
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .compare-model-label {
+    font-size: 0.8rem;
+    color: #7c83fd;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  /* ── Head explorer ────────────────────────────── */
+  .head-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .head-cell {
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    padding: 4px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .head-cell:hover { border-color: #7c83fd; }
+  .head-label { font-size: 0.65rem; color: #888; text-align: center; margin-bottom: 2px; }
+
+  /* ── Loading / status ─────────────────────────── */
+  .status {
+    font-size: 0.8rem;
+    color: #888;
+    padding: 8px 0;
+    min-height: 24px;
+  }
+  .status.error { color: #ff6b6b; }
+  .status.loading { color: #7c83fd; }
+
+  /* ── Mode badge ───────────────────────────────── */
+  .badge {
+    display: inline-block;
+    background: #2d3148;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    color: #7c83fd;
+    margin-left: 8px;
+  }
+
+  /* ── Tooltip ──────────────────────────────────── */
+  .tooltip {
+    position: absolute;
+    background: #1a1d27;
+    border: 1px solid #2d3148;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    color: #e0e0e0;
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+  }
+
+  /* ── Slider ───────────────────────────────────── */
+  input[type="range"] {
+    accent-color: #7c83fd;
+    width: 100%;
+  }
+
+  /* ── Explanatory note ─────────────────────────── */
+  .note {
+    font-size: 0.75rem;
+    color: #666;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🔍 Attention Visualiser</h1>
+    <p>BERT · BioBERT · CLIP · Rollout (Abnar &amp; Zuidema 2020)</p>
+  </div>
+</header>
+
+<main>
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-group" style="grid-column: 1">
+      <label>Input text</label>
+      <input type="text" id="input-text"
+             value="Bilateral pleural effusion with cardiomegaly on chest X-ray"
+             placeholder="Enter text to visualise...">
+    </div>
+    <div class="control-group">
+      <label>Model</label>
+      <select id="model-select">
+        <option value="bert-base-uncased">BERT (General)</option>
+        <option value="dmis-lab/biobert-base-cased-v1.2">BioBERT (Biomedical)</option>
+        <option value="openai/clip-vit-base-patch32">CLIP Text Encoder</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>Mode</label>
+      <select id="mode-select">
+        <option value="rollout">Rollout ✦</option>
+        <option value="raw">Raw (single layer)</option>
+      </select>
+    </div>
+    <div class="control-group" id="layer-group">
+      <label>Layer</label>
+      <select id="layer-select">
+        <!-- populated after first query -->
+        <option value="-1">Last</option>
+      </select>
+    </div>
+    <button id="run-btn" onclick="runAttention()">Visualise</button>
+  </div>
+
+  <div class="status" id="status">Enter text and click Visualise.</div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('bar', this)">CLS Attention</button>
+    <button class="tab" onclick="switchTab('heatmap', this)">Heatmap</button>
+    <button class="tab" onclick="switchTab('arc', this)">Arc Diagram</button>
+    <button class="tab" onclick="switchTab('compare', this)">BERT vs BioBERT</button>
+    <button class="tab" onclick="switchTab('heads', this)">Head Explorer</button>
+  </div>
+
+  <!-- Panel: CLS attention bars -->
+  <div class="panel active" id="panel-bar">
+    <div class="card">
+      <h2>CLS Token Attention <span class="badge" id="bar-mode-badge">rollout</span></h2>
+      <p class="note">How much each token contributed to the [CLS] representation.
+        With rollout, this reflects propagation through all layers — not just the final one.
+        Higher bar = stronger contribution to the final sentence embedding.</p>
+      <br>
+      <div class="token-bars" id="token-bars"></div>
+    </div>
+  </div>
+
+  <!-- Panel: Heatmap -->
+  <div class="panel" id="panel-heatmap">
+    <div class="card">
+      <h2>Attention Heatmap <span class="badge" id="heatmap-mode-badge">rollout</span></h2>
+      <p class="note">Full token-to-token attention matrix.
+        Row = query token (attending FROM), Column = key token (attending TO).
+        Darker = stronger attention.</p>
+      <br>
+      <div class="heatmap-container">
+        <svg id="heatmap-svg"></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel: Arc diagram -->
+  <div class="panel" id="panel-arc">
+    <div class="card">
+      <h2>Arc Diagram <span class="badge" id="arc-mode-badge">rollout</span></h2>
+      <p class="note">Hover a token to see its attention connections as arcs.
+        Arc thickness = attention weight. Colour = direction (above = attending to,
+        below = attended from). Implements attention from [CLS] by default —
+        click any token to switch focus.</p>
+      <br>
+      <svg id="arc-svg" height="200"></svg>
+    </div>
+  </div>
+
+  <!-- Panel: Compare -->
+  <div class="panel" id="panel-compare">
+    <div class="card">
+      <h2>BERT vs BioBERT — Rollout Comparison</h2>
+      <p class="note">Same text, same rollout algorithm, different pretraining.
+        BioBERT was pretrained on PubMed abstracts + PMC full texts — see how
+        biomedical terminology gets attended to differently.</p>
+      <br>
+      <button onclick="runCompare()" style="margin-bottom:16px">Run Comparison</button>
+      <div class="compare-grid" id="compare-grid"></div>
+    </div>
+  </div>
+
+  <!-- Panel: Head explorer -->
+  <div class="panel" id="panel-heads">
+    <div class="card">
+      <h2>Head Explorer</h2>
+      <p class="note">Every attention head in every layer, shown as a mini heatmap.
+        Different heads specialise — some track syntax, others semantics,
+        some focus on adjacent tokens, some on long-range dependencies.
+        Click any head to enlarge it.</p>
+      <br>
+      <button onclick="runHeads()" style="margin-bottom:16px">Load All Heads</button>
+      <div class="head-grid" id="head-grid"></div>
+    </div>
+  </div>
+</main>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let currentData = null;
+let focusedTokenIdx = 0;
+
+// ── Tab switching ──────────────────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+  el.classList.add('active');
+
+  // Re-render arc when switching to that tab
+  if (name === 'arc' && currentData) renderArc(currentData, focusedTokenIdx);
+}
+
+// ── Status helper ──────────────────────────────────────────────────────
+function setStatus(msg, type='') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+
+// ── Main visualise ─────────────────────────────────────────────────────
+async function runAttention() {
+  const text  = document.getElementById('input-text').value.trim();
+  const model = document.getElementById('model-select').value;
+  const mode  = document.getElementById('mode-select').value;
+  const layer = parseInt(document.getElementById('layer-select').value);
+
+  if (!text) { setStatus('Please enter some text.', 'error'); return; }
+
+  setStatus('Running… (first load downloads model weights)', 'loading');
+  document.getElementById('run-btn').disabled = true;
+
+  try {
+    const body = { text, model_name: model, mode, layer, head: 0, discard_ratio: 0.1 };
+    const resp = await fetch('/api/attention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.detail || 'Server error');
+    }
+
+    currentData = await resp.json();
+    focusedTokenIdx = 0;
+
+    // Populate layer select
+    const ls = document.getElementById('layer-select');
+    ls.innerHTML = '';
+    for (let i = 0; i < currentData.n_layers; i++) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = `Layer ${i}`;
+      if (i === currentData.n_layers - 1) opt.selected = true;
+      ls.appendChild(opt);
+    }
+
+    // Update badges
+    const badge = currentData.mode === 'rollout' ? 'rollout ✦' : `raw L${currentData.layer} H${currentData.head}`;
+    ['bar', 'heatmap', 'arc'].forEach(id =>
+      document.getElementById(`${id}-mode-badge`).textContent = badge
+    );
+
+    renderBars(currentData);
+    renderHeatmap(currentData);
+    renderArc(currentData, focusedTokenIdx);
+
+    setStatus(`Done — ${currentData.tokens.length} tokens, ${currentData.n_layers} layers × ${currentData.n_heads} heads.`);
+
+  } catch (e) {
+    setStatus(`Error: ${e.message}`, 'error');
+  } finally {
+    document.getElementById('run-btn').disabled = false;
+  }
+}
+
+// ── Colour scale ───────────────────────────────────────────────────────
+const colourScale = d3.scaleSequential(d3.interpolateBlues).domain([0, 1]);
+
+// ── CLS bar chart ──────────────────────────────────────────────────────
+function renderBars(data) {
+  const cls  = data.cls_attention || data.attention[0];
+  const container = document.getElementById('token-bars');
+  container.innerHTML = '';
+
+  const maxVal = Math.max(...cls);
+
+  cls.forEach((val, i) => {
+    const token = data.tokens[i] || `[${i}]`;
+    const norm  = maxVal > 0 ? val / maxVal : 0;
+    const col   = d3.interpolateBlues(0.2 + norm * 0.8);
+
+    const item = document.createElement('div');
+    item.className = 'token-bar-item';
+    item.innerHTML = `
+      <div class="token-bar-fill">
+        <div class="token-bar-fill-inner"
+             style="height:${Math.max(2, norm * 60)}px; background:${col};"
+             title="${token}: ${val.toFixed(4)}">
+        </div>
+      </div>
+      <div class="token-label" title="${token}">${token}</div>
+    `;
+    item.addEventListener('click', () => {
+      focusedTokenIdx = i;
+      renderArc(data, i);
+      switchTab('arc', document.querySelector('[onclick*="arc"]'));
+    });
+    container.appendChild(item);
+  });
+}
+
+// ── Heatmap ────────────────────────────────────────────────────────────
+function renderHeatmap(data) {
+  const attn   = data.attention;
+  const tokens = data.tokens;
+  const n      = tokens.length;
+  const cell   = Math.min(40, Math.floor(800 / n));
+  const margin = { top: 80, left: 80 };
+
+  const svg = d3.select('#heatmap-svg')
+    .attr('width',  margin.left + n * cell + 20)
+    .attr('height', margin.top  + n * cell + 20);
+
+  svg.selectAll('*').remove();
+
+  const g = svg.append('g')
+    .attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Cells
+  for (let row = 0; row < n; row++) {
+    for (let col = 0; col < n; col++) {
+      const val = attn[row][col];
+      g.append('rect')
+        .attr('x', col * cell)
+        .attr('y', row * cell)
+        .attr('width',  cell - 1)
+        .attr('height', cell - 1)
+        .attr('fill', colourScale(val))
+        .attr('rx', 2)
+        .on('mousemove', function(event) {
+          showTooltip(event,
+            `FROM: ${tokens[row]}<br>TO: ${tokens[col]}<br>weight: ${val.toFixed(4)}`);
+        })
+        .on('mouseleave', hideTooltip);
+    }
+  }
+
+  // Column labels (top)
+  g.selectAll('.col-label')
+    .data(tokens)
+    .enter().append('text')
+    .attr('class', 'col-label')
+    .attr('x', (_, i) => i * cell + cell / 2)
+    .attr('y', -6)
+    .attr('text-anchor', 'end')
+    .attr('transform', (_, i) => `rotate(-45, ${i * cell + cell / 2}, -6)`)
+    .attr('fill', '#888')
+    .attr('font-size', Math.min(11, cell - 2))
+    .text(d => d);
+
+  // Row labels (left)
+  g.selectAll('.row-label')
+    .data(tokens)
+    .enter().append('text')
+    .attr('class', 'row-label')
+    .attr('x', -6)
+    .attr('y', (_, i) => i * cell + cell / 2 + 4)
+    .attr('text-anchor', 'end')
+    .attr('fill', '#888')
+    .attr('font-size', Math.min(11, cell - 2))
+    .text(d => d);
+}
+
+// ── Arc diagram ────────────────────────────────────────────────────────
+function renderArc(data, focusIdx) {
+  const attn   = data.attention;
+  const tokens = data.tokens;
+  const n      = tokens.length;
+  const W      = document.getElementById('arc-svg').parentElement.clientWidth || 900;
+  const H      = 220;
+  const pad    = 40;
+  const tokenW = (W - 2 * pad) / Math.max(n - 1, 1);
+  const mid    = H / 2;
+
+  const svg = d3.select('#arc-svg')
+    .attr('width', W)
+    .attr('height', H);
+
+  svg.selectAll('*').remove();
+
+  const xPos = i => pad + i * tokenW;
+
+  // Threshold — only draw arcs above 5% of max attention
+  const rowAttn = attn[focusIdx];
+  const maxAttn = Math.max(...rowAttn);
+  const thresh  = maxAttn * 0.05;
+
+  // Arcs
+  rowAttn.forEach((val, j) => {
+    if (j === focusIdx || val < thresh) return;
+
+    const x1 = xPos(focusIdx);
+    const x2 = xPos(j);
+    const cx  = (x1 + x2) / 2;
+    const r   = Math.abs(x2 - x1) / 2;
+    const above = j < focusIdx;  // arcs to earlier tokens go above
+
+    const norm = maxAttn > 0 ? val / maxAttn : 0;
+    const strokeW = Math.max(0.5, norm * 6);
+    const col = d3.interpolateBlues(0.3 + norm * 0.7);
+
+    const sign = above ? -1 : 1;
+    const ry   = Math.min(r * 0.6, 80);
+
+    svg.append('path')
+      .attr('d', `M ${x1} ${mid} A ${r} ${ry} 0 0 ${above ? 0 : 1} ${x2} ${mid}`)
+      .attr('fill', 'none')
+      .attr('stroke', col)
+      .attr('stroke-width', strokeW)
+      .attr('opacity', 0.75)
+      .on('mousemove', function(event) {
+        showTooltip(event,
+          `${tokens[focusIdx]} → ${tokens[j]}<br>weight: ${val.toFixed(4)}`);
+      })
+      .on('mouseleave', hideTooltip);
+  });
+
+  // Token labels
+  tokens.forEach((tok, i) => {
+    const x    = xPos(i);
+    const isFocus = i === focusIdx;
+
+    svg.append('circle')
+      .attr('cx', x).attr('cy', mid)
+      .attr('r', isFocus ? 7 : 5)
+      .attr('fill', isFocus ? '#7c83fd' : '#2d3148')
+      .attr('stroke', '#7c83fd')
+      .attr('stroke-width', isFocus ? 2 : 1)
+      .style('cursor', 'pointer')
+      .on('click', () => {
+        focusedTokenIdx = i;
+        renderArc(data, i);
+      });
+
+    svg.append('text')
+      .attr('x', x)
+      .attr('y', mid + 20)
+      .attr('text-anchor', 'middle')
+      .attr('fill', isFocus ? '#7c83fd' : '#888')
+      .attr('font-size', Math.min(11, tokenW * 0.8))
+      .attr('font-weight', isFocus ? 'bold' : 'normal')
+      .style('cursor', 'pointer')
+      .text(tok.length > 8 ? tok.slice(0, 7) + '…' : tok)
+      .on('click', () => {
+        focusedTokenIdx = i;
+        renderArc(data, i);
+      });
+  });
+}
+
+// ── Compare: BERT vs BioBERT ───────────────────────────────────────────
+async function runCompare() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Please enter text first.', 'error'); return; }
+
+  setStatus('Running comparison (loads two models — may take a moment)…', 'loading');
+
+  try {
+    const resp = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, discard_ratio: 0.1 })
+    });
+    const data = await resp.json();
+
+    const grid = document.getElementById('compare-grid');
+    grid.innerHTML = '';
+
+    for (const [name, result] of Object.entries(data.results)) {
+      const col = document.createElement('div');
+      col.innerHTML = `<div class="compare-model-label">${result.display}</div>`;
+
+      // Mini bar chart per model
+      const bars = document.createElement('div');
+      bars.className = 'token-bars';
+      const maxVal = Math.max(...result.cls_attention);
+
+      result.tokens.forEach((tok, i) => {
+        const val  = result.cls_attention[i];
+        const norm = maxVal > 0 ? val / maxVal : 0;
+        const col2 = d3.interpolateBlues(0.2 + norm * 0.8);
+
+        const item = document.createElement('div');
+        item.className = 'token-bar-item';
+        item.innerHTML = `
+          <div class="token-bar-fill">
+            <div class="token-bar-fill-inner"
+                 style="height:${Math.max(2, norm * 60)}px; background:${col2};"
+                 title="${tok}: ${val.toFixed(4)}">
+            </div>
+          </div>
+          <div class="token-label" title="${tok}">${tok}</div>
+        `;
+        bars.appendChild(item);
+      });
+
+      col.appendChild(bars);
+      grid.appendChild(col);
+    }
+
+    setStatus('Comparison complete.');
+
+  } catch (e) {
+    setStatus(`Error: ${e.message}`, 'error');
+  }
+}
+
+// ── Head explorer ──────────────────────────────────────────────────────
+async function runHeads() {
+  const text  = document.getElementById('input-text').value.trim();
+  const model = document.getElementById('model-select').value;
+
+  if (!text) { setStatus('Please enter text first.', 'error'); return; }
+  setStatus('Loading all heads…', 'loading');
+
+  try {
+    const resp = await fetch('/api/heads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, model_name: model })
+    });
+    const data = await resp.json();
+
+    const grid = document.getElementById('head-grid');
+    grid.innerHTML = '';
+
+    const miniSize = 6;
+
+    for (let l = 0; l < data.n_layers; l++) {
+      for (let h = 0; h < data.n_heads; h++) {
+        const attn = data.attentions[l][h];
+        const n    = data.tokens.length;
+        const cell = document.createElement('div');
+        cell.className = 'head-cell';
+
+        const label = document.createElement('div');
+        label.className = 'head-label';
+        label.textContent = `L${l}H${h}`;
+        cell.appendChild(label);
+
+        // Mini canvas heatmap
+        const canvas = document.createElement('canvas');
+        canvas.width  = n * miniSize;
+        canvas.height = n * miniSize;
+        canvas.style.imageRendering = 'pixelated';
+        const ctx = canvas.getContext('2d');
+
+        for (let r = 0; r < n; r++) {
+          for (let c = 0; c < n; c++) {
+            const val = attn[r][c];
+            ctx.fillStyle = d3.interpolateBlues(val);
+            ctx.fillRect(c * miniSize, r * miniSize, miniSize, miniSize);
+          }
+        }
+
+        // Click to show full view
+        canvas.addEventListener('click', () => {
+          const fakeData = {
+            tokens:       data.tokens,
+            attention:    attn,
+            cls_attention: attn[0],
+            mode:         `raw L${l} H${h}`,
+            n_layers:     data.n_layers,
+            n_heads:      data.n_heads,
+          };
+          currentData = fakeData;
+          renderBars(fakeData);
+          renderHeatmap(fakeData);
+          renderArc(fakeData, 0);
+          ['bar', 'heatmap', 'arc'].forEach(id =>
+            document.getElementById(`${id}-mode-badge`).textContent = `raw L${l} H${h}`
+          );
+          switchTab('heatmap', document.querySelector('[onclick*="heatmap"]'));
+        });
+
+        cell.appendChild(canvas);
+        grid.appendChild(cell);
+      }
+    }
+
+    setStatus(`Showing ${data.n_layers} layers × ${data.n_heads} heads. Click any cell to enlarge.`);
+
+  } catch (e) {
+    setStatus(`Error: ${e.message}`, 'error');
+  }
+}
+
+// ── Tooltip ────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(event, html) {
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  tooltip.style.left = (event.pageX + 12) + 'px';
+  tooltip.style.top  = (event.pageY + 12) + 'px';
+}
+
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+// ── Layer select visibility ────────────────────────────────────────────
+document.getElementById('mode-select').addEventListener('change', function() {
+  document.getElementById('layer-group').style.display =
+    this.value === 'raw' ? 'flex' : 'none';
+});
+document.getElementById('layer-group').style.display = 'none';
+
+// ── Enter key ──────────────────────────────────────────────────────────
+document.getElementById('input-text').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runAttention();
+});
+</script>
+</body>
+</html>
