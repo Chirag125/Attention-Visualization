@@ -1,4 +1,4 @@
-# Attention Visualiser — BERT · BioBERT · CLIP
+# Transformer Interpretability: Attention Rollout and Attribution Across BERT and BioBERT
 
 An interactive attention-interpretability tool for transformer text encoders,
 built around attention **rollout** (Abnar & Zuidema, 2020) rather than raw
