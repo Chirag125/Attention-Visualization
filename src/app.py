@@ -117,6 +117,8 @@ async def get_attention(req: AttentionRequest):
             "tokens":        result["tokens"],
             "attention":     normalise(result["attention"]),
             "cls_attention": normalise(result["cls_attention"]),
+            "pool_token_idx":   result["pool_token_idx"],    # NEW
+            "pool_token_label": result["pool_token_label"],  # NEW
             "mode":          "rollout",
             "n_layers":      result["n_layers"],
             "n_heads":       result["n_heads"],
@@ -132,6 +134,8 @@ async def get_attention(req: AttentionRequest):
             "attention": normalise(result["attention"]),
             "layer":     result["layer"],
             "head":      result["head"],
+            "pool_token_idx":   result["pool_token_idx"],    # NEW
+            "pool_token_label": result["pool_token_label"],  # NEW
             "mode":      "raw",
             "n_layers":  result["n_layers"],
             "n_heads":   result["n_heads"],
@@ -196,3 +200,51 @@ async def explore_heads(req: HeadsRequest):
         "n_heads":    result["n_heads"],
         "model_display": SUPPORTED_MODELS[req.model_name]["display"],
     }
+
+# Add after existing endpoints
+
+@app.post("/api/layerwise")
+async def get_layerwise(req: AttentionRequest):
+    extractor = get_extractor(req.model_name)
+    result    = extractor.get_layerwise_cls_attention(req.text)
+    return {
+        "tokens":    result["tokens"],
+        "layerwise": [normalise(np.array(layer)) 
+                      for layer in result["layerwise"]],
+        "pool_token_idx":   result["pool_token_idx"],    # NEW
+        "pool_token_label": result["pool_token_label"],  # NEW
+        "n_layers":  result["n_layers"],
+    }
+
+
+@app.post("/api/embeddings")
+async def get_embeddings(req: AttentionRequest):
+    extractor = get_extractor(req.model_name)
+    result    = extractor.get_embedding_decomposition(req.text)
+    return result
+
+
+@app.post("/api/residual")
+async def get_residual(req: AttentionRequest):
+    extractor = get_extractor(req.model_name)
+    result    = extractor.get_residual_contributions(req.text)
+    return {
+        "tokens":        result["tokens"],
+        "contributions": [normalise(np.array(layer))
+                         for layer in result["contributions"]],
+        "n_layers":      result["n_layers"],
+    }
+
+
+@app.post("/api/entropy")
+async def get_entropy(req: AttentionRequest):
+    extractor = get_extractor(req.model_name)
+    result    = extractor.get_head_entropy(req.text)
+    return result
+
+
+@app.post("/api/gradients")
+async def get_gradients(req: AttentionRequest):
+    extractor = get_extractor(req.model_name)
+    result    = extractor.get_integrated_gradients(req.text)
+    return result

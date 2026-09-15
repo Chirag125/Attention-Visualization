@@ -6,238 +6,107 @@
 <title>Attention Visualiser — BERT · BioBERT · CLIP</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 <style>
-  /* ── Reset & base ─────────────────────────────── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
 
-  body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #0f1117;
-    color: #e0e0e0;
-    min-height: 100vh;
-  }
-
-  /* ── Layout ───────────────────────────────────── */
-  header {
-    background: #1a1d27;
-    border-bottom: 1px solid #2d3148;
-    padding: 16px 32px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
+  header { background: #1a1d27; border-bottom: 1px solid #2d3148; padding: 16px 32px; display: flex; align-items: center; gap: 16px; }
   header h1 { font-size: 1.2rem; font-weight: 600; color: #7c83fd; }
   header p  { font-size: 0.8rem; color: #888; }
 
   main { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
 
-  /* ── Controls ─────────────────────────────────── */
   .controls {
-    background: #1a1d27;
-    border: 1px solid #2d3148;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 24px;
-    display: grid;
-    grid-template-columns: 1fr auto auto auto auto;
-    gap: 12px;
-    align-items: end;
+    background: #1a1d27; border: 1px solid #2d3148; border-radius: 10px;
+    padding: 20px; margin-bottom: 24px;
+    display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 12px; align-items: end;
   }
-
   .control-group { display: flex; flex-direction: column; gap: 6px; }
   .control-group label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
 
   input[type="text"], select {
-    background: #0f1117;
-    border: 1px solid #2d3148;
-    border-radius: 6px;
-    color: #e0e0e0;
-    padding: 8px 12px;
-    font-size: 0.9rem;
-    outline: none;
-    transition: border-color 0.2s;
+    background: #0f1117; border: 1px solid #2d3148; border-radius: 6px;
+    color: #e0e0e0; padding: 8px 12px; font-size: 0.9rem; outline: none; transition: border-color 0.2s;
   }
   input[type="text"]:focus, select:focus { border-color: #7c83fd; }
   input[type="text"] { width: 100%; min-width: 300px; }
 
   button {
-    background: #7c83fd;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 8px 20px;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: background 0.2s;
-    white-space: nowrap;
+    background: #7c83fd; color: #fff; border: none; border-radius: 6px;
+    padding: 8px 20px; font-size: 0.9rem; cursor: pointer; transition: background 0.2s; white-space: nowrap;
   }
   button:hover { background: #5c63e0; }
   button:disabled { background: #444; cursor: default; }
+  button.secondary { background: #2d3148; }
+  button.secondary:hover { background: #3d4160; }
 
-  /* ── Tabs ─────────────────────────────────────── */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #2d3148;
-    padding-bottom: 0;
-  }
-  .tab {
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: #888;
-    padding: 8px 16px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    transition: all 0.2s;
-    border-radius: 0;
-  }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #2d3148; padding-bottom: 0; }
+  .tab { background: none; border: none; border-bottom: 2px solid transparent; color: #888; padding: 8px 14px; cursor: pointer; font-size: 0.82rem; transition: all 0.2s; border-radius: 0; }
   .tab.active { color: #7c83fd; border-bottom-color: #7c83fd; }
   .tab:hover  { color: #e0e0e0; }
 
   .panel { display: none; }
   .panel.active { display: block; }
 
-  /* ── Cards ────────────────────────────────────── */
-  .card {
-    background: #1a1d27;
-    border: 1px solid #2d3148;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-  .card h2 { font-size: 0.9rem; color: #7c83fd; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .card { background: #1a1d27; border: 1px solid #2d3148; border-radius: 10px; padding: 20px; margin-bottom: 20px; }
+  .card h2 { font-size: 0.85rem; color: #7c83fd; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
 
-  /* ── Token bar (CLS attention) ────────────────── */
-  .token-bars { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .token-bar-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-  }
-  .token-label {
-    font-size: 0.72rem;
-    font-family: monospace;
-    color: #ccc;
-    max-width: 60px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: center;
-  }
-  .token-bar-fill {
-    width: 36px;
-    background: #2d3148;
-    border-radius: 3px;
-    overflow: hidden;
-    height: 60px;
-    display: flex;
-    align-items: flex-end;
-  }
-  .token-bar-fill-inner {
-    width: 100%;
-    border-radius: 3px;
-    transition: height 0.3s, background 0.3s;
-  }
+  .token-bars { display: flex; flex-wrap: wrap; gap: 6px; }
+  .token-bar-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
+  .token-label { font-size: 0.7rem; font-family: monospace; color: #ccc; max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+  .token-bar-fill { width: 36px; background: #2d3148; border-radius: 3px; overflow: hidden; height: 60px; display: flex; align-items: flex-end; }
+  .token-bar-fill-inner { width: 100%; border-radius: 3px; transition: height 0.3s, background 0.3s; }
 
-  /* ── Heatmap ──────────────────────────────────── */
-  .heatmap-container {
-    overflow-x: auto;
-  }
-  #heatmap-svg { display: block; }
+  .heatmap-container { overflow-x: auto; }
+  #heatmap-svg, #residual-svg, #entropy-svg { display: block; }
 
-  /* ── Arc diagram ──────────────────────────────── */
-  #arc-svg { display: block; width: 100%; }
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .compare-model-label { font-size: 0.8rem; color: #7c83fd; margin-bottom: 8px; font-weight: 600; }
 
-  /* ── Compare ──────────────────────────────────── */
-  .compare-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  .compare-model-label {
-    font-size: 0.8rem;
-    color: #7c83fd;
-    margin-bottom: 8px;
-    font-weight: 600;
-  }
-
-  /* ── Head explorer ────────────────────────────── */
   .head-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-  .head-cell {
-    border: 1px solid #2d3148;
-    border-radius: 6px;
-    padding: 4px;
-    cursor: pointer;
-    transition: border-color 0.2s;
-  }
+  .head-cell { border: 1px solid #2d3148; border-radius: 6px; padding: 4px; cursor: pointer; transition: border-color 0.2s; }
   .head-cell:hover { border-color: #7c83fd; }
   .head-label { font-size: 0.65rem; color: #888; text-align: center; margin-bottom: 2px; }
 
-  /* ── Loading / status ─────────────────────────── */
-  .status {
-    font-size: 0.8rem;
-    color: #888;
-    padding: 8px 0;
-    min-height: 24px;
-  }
-  .status.error { color: #ff6b6b; }
+  .status { font-size: 0.8rem; color: #888; padding: 8px 0; min-height: 24px; }
+  .status.error   { color: #ff6b6b; }
   .status.loading { color: #7c83fd; }
 
-  /* ── Mode badge ───────────────────────────────── */
-  .badge {
-    display: inline-block;
-    background: #2d3148;
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-size: 0.7rem;
-    color: #7c83fd;
-    margin-left: 8px;
-  }
+  .badge { display: inline-block; background: #2d3148; border-radius: 4px; padding: 2px 8px; font-size: 0.7rem; color: #7c83fd; margin-left: 8px; }
 
-  /* ── Tooltip ──────────────────────────────────── */
-  .tooltip {
-    position: absolute;
-    background: #1a1d27;
-    border: 1px solid #2d3148;
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 0.75rem;
-    color: #e0e0e0;
-    pointer-events: none;
-    z-index: 100;
-    display: none;
-  }
+  .tooltip { position: fixed; background: #1a1d27; border: 1px solid #2d3148; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; color: #e0e0e0; pointer-events: none; z-index: 1000; display: none; }
 
-  /* ── Slider ───────────────────────────────────── */
-  input[type="range"] {
-    accent-color: #7c83fd;
-    width: 100%;
-  }
+  .note { font-size: 0.75rem; color: #666; line-height: 1.5; margin-top: 8px; }
 
-  /* ── Explanatory note ─────────────────────────── */
-  .note {
-    font-size: 0.75rem;
-    color: #666;
-    line-height: 1.5;
-    margin-top: 8px;
-  }
+  /* Layer slider */
+  .slider-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  .slider-row input[type=range] { flex: 1; accent-color: #7c83fd; }
+  .slider-label { font-size: 0.8rem; color: #7c83fd; min-width: 80px; }
+
+  /* Stacked bars for embedding decomposition */
+  .stacked-bar-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .stacked-bar { width: 32px; height: 80px; display: flex; flex-direction: column-reverse; border-radius: 4px; overflow: hidden; }
+  .seg-token { background: #7c83fd; transition: height 0.3s; }
+  .seg-pos   { background: #fd7c7c; transition: height 0.3s; }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #888; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
 </style>
 </head>
 <body>
 
 <header>
   <div>
-    <h1>🔍 Attention Visualiser</h1>
-    <p>BERT · BioBERT · CLIP · Rollout (Abnar &amp; Zuidema 2020)</p>
+    <h1>Attention Visualiser</h1>
+    <p>BERT · BioBERT · CLIP · Rollout (Abnar &amp; Zuidema 2020) · Residual Stream · Integrated Gradients</p>
   </div>
 </header>
 
 <main>
   <!-- Controls -->
   <div class="controls">
-    <div class="control-group" style="grid-column: 1">
+    <div class="control-group" style="grid-column:1">
       <label>Input text</label>
       <input type="text" id="input-text"
              value="Bilateral pleural effusion with cardiomegaly on chest X-ray"
@@ -253,17 +122,20 @@
     </div>
     <div class="control-group">
       <label>Mode</label>
-      <select id="mode-select">
-        <option value="rollout">Rollout ✦</option>
+      <select id="mode-select" onchange="toggleLayerGroup()">
+        <option value="rollout">Rollout</option>
         <option value="raw">Raw (single layer)</option>
       </select>
     </div>
-    <div class="control-group" id="layer-group">
+      <div class="control-group" id="discard-group">
+    <label>Discard ratio: <span id="discard-label">0.5</span></label>
+    <input type="range" id="discard-slider" min="0" max="0.9" step="0.05" value="0.5"
+          oninput="document.getElementById('discard-label').textContent=this.value"
+          style="accent-color:#7c83fd; width:120px">
+  </div>
+    <div class="control-group" id="layer-group" style="display:none">
       <label>Layer</label>
-      <select id="layer-select">
-        <!-- populated after first query -->
-        <option value="-1">Last</option>
-      </select>
+      <select id="layer-select"><option value="-1">Last</option></select>
     </div>
     <button id="run-btn" onclick="runAttention()">Visualise</button>
   </div>
@@ -272,73 +144,135 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" onclick="switchTab('bar', this)">CLS Attention</button>
-    <button class="tab" onclick="switchTab('heatmap', this)">Heatmap</button>
-    <button class="tab" onclick="switchTab('arc', this)">Arc Diagram</button>
-    <button class="tab" onclick="switchTab('compare', this)">BERT vs BioBERT</button>
-    <button class="tab" onclick="switchTab('heads', this)">Head Explorer</button>
+    <button class="tab active"  onclick="switchTab('bar',       this)">CLS Attention</button>
+    <button class="tab"         onclick="switchTab('heatmap',   this)">Heatmap</button>
+    <button class="tab"         onclick="switchTab('arc',       this)">Arc Diagram</button>
+    <button class="tab"         onclick="switchTab('layerwise', this)">Layer Evolution</button>
+    <button class="tab"         onclick="switchTab('embeddings',this)">Token vs Position</button>
+    <button class="tab"         onclick="switchTab('residual',  this)">Residual Stream</button>
+    <button class="tab"         onclick="switchTab('entropy',   this)">Head Entropy</button>
+    <button class="tab"         onclick="switchTab('gradients', this)">Gradients</button>
+    <button class="tab"         onclick="switchTab('compare',   this)">BERT vs BioBERT</button>
+    <button class="tab"         onclick="switchTab('heads',     this)">Head Explorer</button>
   </div>
 
-  <!-- Panel: CLS attention bars -->
+  <!-- ── Panel: CLS bars ── -->
   <div class="panel active" id="panel-bar">
     <div class="card">
-      <h2>CLS Token Attention <span class="badge" id="bar-mode-badge">rollout</span></h2>
-      <p class="note">How much each token contributed to the [CLS] representation.
-        With rollout, this reflects propagation through all layers — not just the final one.
-        Higher bar = stronger contribution to the final sentence embedding.</p>
+      <h2><span id="pool-token-label-display">[CLS]</span> Token Attention
+    <span class="badge" id="bar-mode-badge">rollout</span></h2>
+<p class="note">How much each token contributed to the
+    <span id="pool-token-label-note">[CLS]</span> representation
+    through the full network. For CLIP, the pooling token is
+    <code>&lt;|endoftext|&gt;</code> (EOS), not position 0.
+    The highlighted token label indicates which is being used.
+    Click any bar to focus the Arc Diagram on that token.</p>
       <br>
       <div class="token-bars" id="token-bars"></div>
     </div>
   </div>
 
-  <!-- Panel: Heatmap -->
+  <!-- ── Panel: Heatmap ── -->
   <div class="panel" id="panel-heatmap">
     <div class="card">
       <h2>Attention Heatmap <span class="badge" id="heatmap-mode-badge">rollout</span></h2>
-      <p class="note">Full token-to-token attention matrix.
-        Row = query token (attending FROM), Column = key token (attending TO).
-        Darker = stronger attention.</p>
+      <p class="note">Row = attending FROM, Column = attending TO. Hover for exact values.</p>
       <br>
-      <div class="heatmap-container">
-        <svg id="heatmap-svg"></svg>
-      </div>
+      <div class="heatmap-container"><svg id="heatmap-svg"></svg></div>
     </div>
   </div>
 
-  <!-- Panel: Arc diagram -->
+  <!-- ── Panel: Arc ── -->
   <div class="panel" id="panel-arc">
     <div class="card">
       <h2>Arc Diagram <span class="badge" id="arc-mode-badge">rollout</span></h2>
-      <p class="note">Hover a token to see its attention connections as arcs.
-        Arc thickness = attention weight. Colour = direction (above = attending to,
-        below = attended from). Implements attention from [CLS] by default —
-        click any token to switch focus.</p>
+      <p class="note">Click any token to see its attention arcs. Arc thickness = attention weight.</p>
       <br>
-      <svg id="arc-svg" height="200"></svg>
+      <svg id="arc-svg" height="220"></svg>
     </div>
   </div>
 
-  <!-- Panel: Compare -->
+  <!-- ── Panel: Layer Evolution ── -->
+  <div class="panel" id="panel-layerwise">
+    <div class="card">
+      <h2>Layer-by-Layer CLS Attention Evolution</h2>
+      <p class="note">Drag the slider to watch how the model's attention redistributes as information flows through each layer. Early layers capture surface patterns; later layers capture semantic relationships.</p>
+      <br>
+      <button class="secondary" onclick="runLayerwise()" style="margin-bottom:16px">Load Layer Evolution</button>
+      <div class="slider-row" id="layer-slider-row" style="display:none">
+        <span class="slider-label" id="layer-slider-label">Layer 0</span>
+        <input type="range" id="layer-slider" min="0" value="0" oninput="updateLayerBars(this.value)">
+        <button class="secondary" id="anim-btn" onclick="toggleAnimation()">Play</button>
+      </div>
+      <div class="token-bars" id="layerwise-bars"></div>
+    </div>
+  </div>
+
+  <!-- ── Panel: Embedding decomposition ── -->
+  <div class="panel" id="panel-embeddings">
+    <div class="card">
+      <h2>Token Embedding vs Positional Encoding Contribution</h2>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:#7c83fd"></div>Semantic (token embedding)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#fd7c7c"></div>Positional encoding</div>
+      </div>
+      <p class="note">Shows what fraction of each token's layer-0 representation comes from its meaning (blue) versus its position (red). Medical terms rely more on semantic embedding; function words rely more on position.</p>
+      <br>
+      <button class="secondary" onclick="runEmbeddings()" style="margin-bottom:16px">Load Decomposition</button>
+      <div class="token-bars" id="embedding-bars"></div>
+      <div id="embedding-detail" style="margin-top:16px; font-size:0.78rem; color:#888;"></div>
+    </div>
+  </div>
+
+  <!-- ── Panel: Residual stream ── -->
+  <div class="panel" id="panel-residual">
+    <div class="card">
+      <h2>Residual Stream — Layer Contribution per Token</h2>
+      <p class="note">How much each layer CHANGES each token's representation (L2 norm of hidden state delta). Hot = layer is actively processing that token. Cool = residual connection dominates (pass-through).</p>
+      <br>
+      <button class="secondary" onclick="runResidual()" style="margin-bottom:16px">Load Residual Stream</button>
+      <div class="heatmap-container"><svg id="residual-svg"></svg></div>
+    </div>
+  </div>
+
+  <!-- ── Panel: Head entropy ── -->
+  <div class="panel" id="panel-entropy">
+    <div class="card">
+      <h2>Attention Head Entropy</h2>
+      <p class="note">Shannon entropy per head. Low entropy = focused head (tracks specific relationships). High entropy = diffuse/uniform attention = head may be inactive. Rows = layers, Columns = heads.</p>
+      <br>
+      <button class="secondary" onclick="runEntropy()" style="margin-bottom:16px">Load Head Entropy</button>
+      <div class="heatmap-container"><svg id="entropy-svg"></svg></div>
+    </div>
+  </div>
+
+  <!-- ── Panel: Integrated Gradients ── -->
+  <div class="panel" id="panel-gradients">
+    <div class="card">
+      <h2>Integrated Gradients — Token Importance</h2>
+      <p class="note">True token importance via gradient attribution (Sundararajan et al. 2017). Unlike attention weights, this measures how much changing each input token would actually affect the [CLS] output representation.</p>
+      <br>
+      <button class="secondary" onclick="runGradients()" style="margin-bottom:16px">Run Integrated Gradients (slower)</button>
+      <div class="token-bars" id="gradient-bars"></div>
+    </div>
+  </div>
+
+  <!-- ── Panel: Compare ── -->
   <div class="panel" id="panel-compare">
     <div class="card">
       <h2>BERT vs BioBERT — Rollout Comparison</h2>
-      <p class="note">Same text, same rollout algorithm, different pretraining.
-        BioBERT was pretrained on PubMed abstracts + PMC full texts — see how
-        biomedical terminology gets attended to differently.</p>
+      <p class="note">Same text, same rollout algorithm, different pretraining corpus. BioBERT was pretrained on PubMed + PMC full texts — watch how biomedical terminology is attended to differently.</p>
       <br>
       <button onclick="runCompare()" style="margin-bottom:16px">Run Comparison</button>
       <div class="compare-grid" id="compare-grid"></div>
     </div>
   </div>
 
-  <!-- Panel: Head explorer -->
+  <!-- ── Panel: Head explorer ── -->
   <div class="panel" id="panel-heads">
     <div class="card">
-      <h2>Head Explorer</h2>
-      <p class="note">Every attention head in every layer, shown as a mini heatmap.
-        Different heads specialise — some track syntax, others semantics,
-        some focus on adjacent tokens, some on long-range dependencies.
-        Click any head to enlarge it.</p>
+      <h2>Head Explorer — All Layers x All Heads</h2>
+      <p class="note">Click any head to enlarge it in the Heatmap tab. Different heads specialise — some track syntax, others semantics, some attend locally, some long-range.</p>
       <br>
       <button onclick="runHeads()" style="margin-bottom:16px">Load All Heads</button>
       <div class="head-grid" id="head-grid"></div>
@@ -350,112 +284,145 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────
-let currentData = null;
+let currentData    = null;
+let layerwiseData  = null;
 let focusedTokenIdx = 0;
+let animTimer      = null;
+let animLayer      = 0;
 
-// ── Tab switching ──────────────────────────────────────────────────────
-function switchTab(name, el) {
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(`panel-${name}`).classList.add('active');
-  el.classList.add('active');
-
-  // Re-render arc when switching to that tab
-  if (name === 'arc' && currentData) renderArc(currentData, focusedTokenIdx);
-}
-
-// ── Status helper ──────────────────────────────────────────────────────
+// ── Utilities ──────────────────────────────────────────────────────────
 function setStatus(msg, type='') {
   const el = document.getElementById('status');
   el.textContent = msg;
   el.className = 'status ' + type;
 }
 
-// ── Main visualise ─────────────────────────────────────────────────────
-async function runAttention() {
-  const text  = document.getElementById('input-text').value.trim();
-  const model = document.getElementById('model-select').value;
-  const mode  = document.getElementById('mode-select').value;
-  const layer = parseInt(document.getElementById('layer-select').value);
+function toggleLayerGroup() {
+  const mode = document.getElementById('mode-select').value;
+  document.getElementById('layer-group').style.display = mode === 'raw' ? 'flex' : 'none';
+}
 
+function switchTab(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'arc' && currentData) renderArc(currentData, focusedTokenIdx);
+}
+
+const colourBlue = d3.scaleSequential(d3.interpolateBlues).domain([0, 1]);
+const colourHot  = d3.scaleSequential(d3.interpolateYlOrRd).domain([0, 1]);
+
+function normaliseArr(arr) {
+  const mn = Math.min(...arr), mx = Math.max(...arr);
+  if (mx - mn < 1e-8) return arr.map(() => 0);
+  return arr.map(v => (v - mn) / (mx - mn));
+}
+
+// ── Tooltip ────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+function showTip(event, html) {
+  tooltip.innerHTML = html;
+  tooltip.style.display = 'block';
+  tooltip.style.left = (event.clientX + 14) + 'px';
+  tooltip.style.top  = (event.clientY + 14) + 'px';
+}
+function hideTip() { tooltip.style.display = 'none'; }
+
+// ── POST helper ────────────────────────────────────────────────────────
+async function post(endpoint, body) {
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail || `Server error ${resp.status}`);
+  }
+  return resp.json();
+}
+
+function baseBody() {
+  return {
+    text:          document.getElementById('input-text').value.trim(),
+    model_name:    document.getElementById('model-select').value,
+    mode:          document.getElementById('mode-select').value,
+    layer:         parseInt(document.getElementById('layer-select').value || '-1'),
+    head:          0,
+    discard_ratio: parseFloat(document.getElementById('discard-slider').value)
+  };
+}
+
+// ── Main attention run ─────────────────────────────────────────────────
+async function runAttention() {
+  const text = document.getElementById('input-text').value.trim();
   if (!text) { setStatus('Please enter some text.', 'error'); return; }
 
-  setStatus('Running… (first load downloads model weights)', 'loading');
+  setStatus('Running… (first load downloads model weights ~400MB)', 'loading');
   document.getElementById('run-btn').disabled = true;
 
   try {
-    const body = { text, model_name: model, mode, layer, head: 0, discard_ratio: 0.1 };
-    const resp = await fetch('/api/attention', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json();
-      throw new Error(err.detail || 'Server error');
-    }
-
-    currentData = await resp.json();
-    focusedTokenIdx = 0;
+    currentData = await post('/api/attention', baseBody());
+    const poolLabel = currentData.pool_token_label || '[CLS]';
+  document.getElementById('pool-token-label-display').textContent = poolLabel;
+  document.getElementById('pool-token-label-note').textContent     = poolLabel;
 
     // Populate layer select
     const ls = document.getElementById('layer-select');
     ls.innerHTML = '';
     for (let i = 0; i < currentData.n_layers; i++) {
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = `Layer ${i}`;
-      if (i === currentData.n_layers - 1) opt.selected = true;
-      ls.appendChild(opt);
+      const o = document.createElement('option');
+      o.value = i; o.textContent = `Layer ${i}`;
+      if (i === currentData.n_layers - 1) o.selected = true;
+      ls.appendChild(o);
     }
 
-    // Update badges
-    const badge = currentData.mode === 'rollout' ? 'rollout ✦' : `raw L${currentData.layer} H${currentData.head}`;
-    ['bar', 'heatmap', 'arc'].forEach(id =>
-      document.getElementById(`${id}-mode-badge`).textContent = badge
+    const badge = currentData.mode === 'rollout'
+      ? 'rollout' : `raw L${currentData.layer} H${currentData.head}`;
+    ['bar','heatmap','arc'].forEach(id =>
+      document.getElementById(id + '-mode-badge').textContent = badge
     );
 
+    focusedTokenIdx = 0;
     renderBars(currentData);
     renderHeatmap(currentData);
     renderArc(currentData, focusedTokenIdx);
 
-    setStatus(`Done — ${currentData.tokens.length} tokens, ${currentData.n_layers} layers × ${currentData.n_heads} heads.`);
-
-  } catch (e) {
-    setStatus(`Error: ${e.message}`, 'error');
+    setStatus(`Done — ${currentData.tokens.length} tokens, ${currentData.n_layers} layers x ${currentData.n_heads} heads.`);
+  } catch(e) {
+    setStatus('Error: ' + e.message, 'error');
   } finally {
     document.getElementById('run-btn').disabled = false;
   }
 }
 
-// ── Colour scale ───────────────────────────────────────────────────────
-const colourScale = d3.scaleSequential(d3.interpolateBlues).domain([0, 1]);
-
-// ── CLS bar chart ──────────────────────────────────────────────────────
-function renderBars(data) {
-  const cls  = data.cls_attention || data.attention[0];
-  const container = document.getElementById('token-bars');
+// ── CLS bars ───────────────────────────────────────────────────────────
+function renderBars(data, containerId='token-bars') {
+  const cls = data.cls_attention || data.attention[0];
+  const norm = normaliseArr(cls);
+  const poolIdx = data.pool_token_idx ?? 0;  // FIX
+  const container = document.getElementById(containerId);
   container.innerHTML = '';
 
-  const maxVal = Math.max(...cls);
-
   cls.forEach((val, i) => {
-    const token = data.tokens[i] || `[${i}]`;
-    const norm  = maxVal > 0 ? val / maxVal : 0;
-    const col   = d3.interpolateBlues(0.2 + norm * 0.8);
+    const tok = (data.tokens[i] || `[${i}]`);
+    const n   = norm[i];
+    const isPool = i === poolIdx;  // FIX
+    const col = colourBlue(0.2 + n * 0.8);
 
     const item = document.createElement('div');
     item.className = 'token-bar-item';
     item.innerHTML = `
       <div class="token-bar-fill">
         <div class="token-bar-fill-inner"
-             style="height:${Math.max(2, norm * 60)}px; background:${col};"
-             title="${token}: ${val.toFixed(4)}">
+             style="height:${Math.max(2, n*58)}px; background:${col}">
         </div>
       </div>
-      <div class="token-label" title="${token}">${token}</div>
-    `;
+      <div class="token-label" title="${tok}">${tok}</div>`;
+
+    item.addEventListener('mousemove', ev => showTip(ev, `${tok}<br>${val.toFixed(4)}`));
+    item.addEventListener('mouseleave', hideTip);
     item.addEventListener('click', () => {
       focusedTokenIdx = i;
       renderArc(data, i);
@@ -466,276 +433,468 @@ function renderBars(data) {
 }
 
 // ── Heatmap ────────────────────────────────────────────────────────────
-function renderHeatmap(data) {
-  const attn   = data.attention;
-  const tokens = data.tokens;
-  const n      = tokens.length;
-  const cell   = Math.min(40, Math.floor(800 / n));
-  const margin = { top: 80, left: 80 };
+function renderHeatmap(data, svgId='heatmap-svg', colFn=colourBlue) {
+  const attn = data.attention, tokens = data.tokens, n = tokens.length;
+  const cell = Math.min(40, Math.floor(760 / n));
+  const mL = 80, mT = 80;
 
-  const svg = d3.select('#heatmap-svg')
-    .attr('width',  margin.left + n * cell + 20)
-    .attr('height', margin.top  + n * cell + 20);
-
+  const svg = d3.select('#' + svgId)
+    .attr('width',  mL + n * cell + 20)
+    .attr('height', mT + n * cell + 20);
   svg.selectAll('*').remove();
+  const g = svg.append('g').attr('transform', `translate(${mL},${mT})`);
 
-  const g = svg.append('g')
-    .attr('transform', `translate(${margin.left},${margin.top})`);
-
-  // Cells
-  for (let row = 0; row < n; row++) {
-    for (let col = 0; col < n; col++) {
-      const val = attn[row][col];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
       g.append('rect')
-        .attr('x', col * cell)
-        .attr('y', row * cell)
-        .attr('width',  cell - 1)
-        .attr('height', cell - 1)
-        .attr('fill', colourScale(val))
-        .attr('rx', 2)
-        .on('mousemove', function(event) {
-          showTooltip(event,
-            `FROM: ${tokens[row]}<br>TO: ${tokens[col]}<br>weight: ${val.toFixed(4)}`);
-        })
-        .on('mouseleave', hideTooltip);
+        .attr('x', c*cell).attr('y', r*cell)
+        .attr('width', cell-1).attr('height', cell-1)
+        .attr('fill', colFn(attn[r][c])).attr('rx', 2)
+        .on('mousemove', ev => showTip(ev,
+          `FROM: ${tokens[r]}<br>TO: ${tokens[c]}<br>${attn[r][c].toFixed(4)}`))
+        .on('mouseleave', hideTip);
     }
   }
-
-  // Column labels (top)
-  g.selectAll('.col-label')
-    .data(tokens)
-    .enter().append('text')
-    .attr('class', 'col-label')
-    .attr('x', (_, i) => i * cell + cell / 2)
-    .attr('y', -6)
-    .attr('text-anchor', 'end')
-    .attr('transform', (_, i) => `rotate(-45, ${i * cell + cell / 2}, -6)`)
-    .attr('fill', '#888')
-    .attr('font-size', Math.min(11, cell - 2))
+  const fs = Math.min(11, cell - 2);
+  g.selectAll('.cl').data(tokens).enter().append('text')
+    .attr('x', (_,i) => i*cell + cell/2).attr('y', -6)
+    .attr('text-anchor','end').attr('fill','#888').attr('font-size', fs)
+    .attr('transform', (_,i) => `rotate(-45,${i*cell+cell/2},-6)`)
     .text(d => d);
-
-  // Row labels (left)
-  g.selectAll('.row-label')
-    .data(tokens)
-    .enter().append('text')
-    .attr('class', 'row-label')
-    .attr('x', -6)
-    .attr('y', (_, i) => i * cell + cell / 2 + 4)
-    .attr('text-anchor', 'end')
-    .attr('fill', '#888')
-    .attr('font-size', Math.min(11, cell - 2))
+  g.selectAll('.rl').data(tokens).enter().append('text')
+    .attr('x', -6).attr('y', (_,i) => i*cell + cell/2 + 4)
+    .attr('text-anchor','end').attr('fill','#888').attr('font-size', fs)
     .text(d => d);
 }
 
 // ── Arc diagram ────────────────────────────────────────────────────────
 function renderArc(data, focusIdx) {
-  const attn   = data.attention;
-  const tokens = data.tokens;
-  const n      = tokens.length;
-  const W      = document.getElementById('arc-svg').parentElement.clientWidth || 900;
-  const H      = 220;
-  const pad    = 40;
-  const tokenW = (W - 2 * pad) / Math.max(n - 1, 1);
-  const mid    = H / 2;
-
-  const svg = d3.select('#arc-svg')
-    .attr('width', W)
-    .attr('height', H);
-
-  svg.selectAll('*').remove();
-
+  const attn = data.attention, tokens = data.tokens, n = tokens.length;
+  const W = document.getElementById('arc-svg').parentElement.clientWidth || 900;
+  const H = 220, pad = 40, mid = H / 2;
+  const tokenW = (W - 2*pad) / Math.max(n-1, 1);
   const xPos = i => pad + i * tokenW;
 
-  // Threshold — only draw arcs above 5% of max attention
-  const rowAttn = attn[focusIdx];
-  const maxAttn = Math.max(...rowAttn);
-  const thresh  = maxAttn * 0.05;
+  const svg = d3.select('#arc-svg').attr('width', W).attr('height', H);
+  svg.selectAll('*').remove();
 
-  // Arcs
-  rowAttn.forEach((val, j) => {
-    if (j === focusIdx || val < thresh) return;
+  const row = attn[focusIdx];
+  const mx  = Math.max(...row);
+  const thr = mx * 0.05;
 
-    const x1 = xPos(focusIdx);
-    const x2 = xPos(j);
-    const cx  = (x1 + x2) / 2;
-    const r   = Math.abs(x2 - x1) / 2;
-    const above = j < focusIdx;  // arcs to earlier tokens go above
-
-    const norm = maxAttn > 0 ? val / maxAttn : 0;
-    const strokeW = Math.max(0.5, norm * 6);
-    const col = d3.interpolateBlues(0.3 + norm * 0.7);
-
-    const sign = above ? -1 : 1;
-    const ry   = Math.min(r * 0.6, 80);
+  row.forEach((val, j) => {
+    if (j === focusIdx || val < thr) return;
+    const x1 = xPos(focusIdx), x2 = xPos(j);
+    const r  = Math.abs(x2 - x1) / 2;
+    const ry = Math.min(r * 0.6, 80);
+    const n2 = mx > 0 ? val / mx : 0;
+    const above = j < focusIdx;
 
     svg.append('path')
-      .attr('d', `M ${x1} ${mid} A ${r} ${ry} 0 0 ${above ? 0 : 1} ${x2} ${mid}`)
-      .attr('fill', 'none')
-      .attr('stroke', col)
-      .attr('stroke-width', strokeW)
+      .attr('d', `M${x1} ${mid} A${r} ${ry} 0 0 ${above?0:1} ${x2} ${mid}`)
+      .attr('fill','none')
+      .attr('stroke', colourBlue(0.3 + n2*0.7))
+      .attr('stroke-width', Math.max(0.5, n2*6))
       .attr('opacity', 0.75)
-      .on('mousemove', function(event) {
-        showTooltip(event,
-          `${tokens[focusIdx]} → ${tokens[j]}<br>weight: ${val.toFixed(4)}`);
-      })
-      .on('mouseleave', hideTooltip);
+      .on('mousemove', ev => showTip(ev,
+        `${tokens[focusIdx]} → ${tokens[j]}<br>${val.toFixed(4)}`))
+      .on('mouseleave', hideTip);
   });
 
-  // Token labels
   tokens.forEach((tok, i) => {
-    const x    = xPos(i);
-    const isFocus = i === focusIdx;
-
+    const x = xPos(i), isFocus = i === focusIdx;
     svg.append('circle')
-      .attr('cx', x).attr('cy', mid)
-      .attr('r', isFocus ? 7 : 5)
-      .attr('fill', isFocus ? '#7c83fd' : '#2d3148')
-      .attr('stroke', '#7c83fd')
-      .attr('stroke-width', isFocus ? 2 : 1)
-      .style('cursor', 'pointer')
-      .on('click', () => {
-        focusedTokenIdx = i;
-        renderArc(data, i);
-      });
-
+      .attr('cx',x).attr('cy',mid).attr('r', isFocus?7:5)
+      .attr('fill', isFocus?'#7c83fd':'#2d3148')
+      .attr('stroke','#7c83fd').attr('stroke-width', isFocus?2:1)
+      .style('cursor','pointer')
+      .on('click', () => { focusedTokenIdx=i; renderArc(data,i); });
     svg.append('text')
-      .attr('x', x)
-      .attr('y', mid + 20)
-      .attr('text-anchor', 'middle')
-      .attr('fill', isFocus ? '#7c83fd' : '#888')
-      .attr('font-size', Math.min(11, tokenW * 0.8))
-      .attr('font-weight', isFocus ? 'bold' : 'normal')
-      .style('cursor', 'pointer')
-      .text(tok.length > 8 ? tok.slice(0, 7) + '…' : tok)
-      .on('click', () => {
-        focusedTokenIdx = i;
-        renderArc(data, i);
-      });
+      .attr('x',x).attr('y', mid+20).attr('text-anchor','middle')
+      .attr('fill', isFocus?'#7c83fd':'#888')
+      .attr('font-size', Math.min(11, tokenW*0.8))
+      .attr('font-weight', isFocus?'bold':'normal')
+      .style('cursor','pointer')
+      .text(tok.length>8 ? tok.slice(0,7)+'…' : tok)
+      .on('click', () => { focusedTokenIdx=i; renderArc(data,i); });
   });
 }
 
-// ── Compare: BERT vs BioBERT ───────────────────────────────────────────
+// ── Layer evolution ────────────────────────────────────────────────────
+async function runLayerwise() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Enter text first.', 'error'); return; }
+  setStatus('Loading layer evolution…', 'loading');
+  try {
+    layerwiseData = await post('/api/layerwise', baseBody());
+    const slider = document.getElementById('layer-slider');
+    slider.max   = layerwiseData.n_layers - 1;
+    slider.value = 0;
+    document.getElementById('layer-slider-row').style.display = 'flex';
+    updateLayerBars(0);
+    setStatus(`Layer evolution loaded — ${layerwiseData.n_layers} layers.`);
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
+}
+
+function updateLayerBars(layerIdx) {
+  if (!layerwiseData) return;
+  layerIdx = parseInt(layerIdx);
+  document.getElementById('layer-slider-label').textContent = `Layer ${layerIdx}`;
+
+  const raw  = layerwiseData.layerwise[layerIdx];
+  const norm = normaliseArr(raw);
+   const poolIdx = layerwiseData.pool_token_idx ?? 0;  // FIX
+  const container = document.getElementById('layerwise-bars');
+  container.innerHTML = '';
+
+  layerwiseData.tokens.forEach((tok, i) => {
+    const n   = norm[i];
+    const col = colourBlue(0.15 + n * 0.85);
+    const item = document.createElement('div');
+    const isPool = i === poolIdx; 
+    item.className = 'token-bar-item';
+    item.innerHTML = `
+      <div class="token-bar-fill">
+        <div class="token-bar-fill-inner"
+             style="height:${Math.max(2,n*58)}px;background:${col}">
+        </div>
+      </div>
+      <div class="token-label" title="${tok}">${tok}</div>`;
+    item.addEventListener('mousemove', ev =>
+      showTip(ev, `${tok}<br>layer ${layerIdx}: ${raw[i].toFixed(4)}`));
+    item.addEventListener('mouseleave', hideTip);
+    container.appendChild(item);
+  });
+}
+
+function toggleAnimation() {
+  const btn = document.getElementById('anim-btn');
+  if (animTimer) {
+    clearInterval(animTimer); animTimer = null; btn.textContent = 'Play';
+  } else {
+    btn.textContent = 'Pause';
+    animLayer = 0;
+    animTimer = setInterval(() => {
+      const max = parseInt(document.getElementById('layer-slider').max);
+      animLayer = (animLayer + 1) % (max + 1);
+      document.getElementById('layer-slider').value = animLayer;
+      updateLayerBars(animLayer);
+      if (animLayer === max) { clearInterval(animTimer); animTimer=null; btn.textContent='Play'; }
+    }, 400);
+  }
+}
+
+// ── Embedding decomposition ────────────────────────────────────────────
+async function runEmbeddings() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Enter text first.','error'); return; }
+  setStatus('Computing embedding decomposition…','loading');
+  try {
+    const data = await post('/api/embeddings', baseBody());
+    const container = document.getElementById('embedding-bars');
+    container.innerHTML = '';
+
+    data.tokens.forEach((tok, i) => {
+      const tRatio = data.token_ratio[i];
+      const pRatio = data.pos_ratio[i];
+
+      const item = document.createElement('div');
+      item.className = 'stacked-bar-item';
+      item.innerHTML = `
+        <div class="stacked-bar">
+          <div class="seg-token" style="height:${tRatio*80}px" title="semantic: ${tRatio.toFixed(3)}"></div>
+          <div class="seg-pos"   style="height:${pRatio*80}px" title="positional: ${pRatio.toFixed(3)}"></div>
+        </div>
+        <div class="token-label" title="${tok}">${tok}</div>`;
+
+      item.addEventListener('mousemove', ev => showTip(ev,
+        `${tok}<br>Semantic: ${(tRatio*100).toFixed(1)}%<br>Positional: ${(pRatio*100).toFixed(1)}%`));
+      item.addEventListener('mouseleave', hideTip);
+      container.appendChild(item);
+    });
+
+    // Detail table
+    const detail = document.getElementById('embedding-detail');
+    detail.innerHTML = '<br><b style="color:#7c83fd">Token norms:</b><br>' +
+      data.tokens.map((t,i) =>
+        `${t}: embedding=${data.token_norms[i].toFixed(2)} pos=${data.pos_norms[i].toFixed(2)}`
+      ).join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+
+    setStatus('Embedding decomposition complete.');
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
+}
+
+// ── Residual stream ────────────────────────────────────────────────────
+async function runResidual() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Enter text first.','error'); return; }
+  setStatus('Computing residual stream (may take 30s)…','loading');
+  try {
+    const data = await post('/api/residual', baseBody());
+
+    // Render as heatmap: rows=layers, cols=tokens
+    const contribs = data.contributions;  // [n_layers][n_tokens]
+    const nL = data.n_layers;
+    const tokens = data.tokens;
+    const nT = tokens.length;
+    const cellW = Math.min(50, Math.floor(760 / nT));
+    const cellH = Math.min(30, Math.floor(400 / nL));
+    const mL = 60, mT = 60;
+
+    const svg = d3.select('#residual-svg')
+      .attr('width',  mL + nT * cellW + 20)
+      .attr('height', mT + nL * cellH + 20);
+    svg.selectAll('*').remove();
+    const g = svg.append('g').attr('transform', `translate(${mL},${mT})`);
+
+    for (let l = 0; l < nL; l++) {
+      for (let t = 0; t < nT; t++) {
+        const val = contribs[l][t];
+        g.append('rect')
+          .attr('x', t*cellW).attr('y', l*cellH)
+          .attr('width', cellW-1).attr('height', cellH-1)
+          .attr('fill', colourHot(val)).attr('rx',2)
+          .on('mousemove', ev => showTip(ev,
+            `Layer ${l} | ${tokens[t]}<br>delta norm: ${val.toFixed(4)}`))
+          .on('mouseleave', hideTip);
+      }
+    }
+    // Column labels
+    g.selectAll('.cl').data(tokens).enter().append('text')
+      .attr('x', (_,i) => i*cellW+cellW/2).attr('y',-6)
+      .attr('text-anchor','end').attr('fill','#888').attr('font-size',10)
+      .attr('transform',(_,i)=>`rotate(-40,${i*cellW+cellW/2},-6)`)
+      .text(d=>d);
+    // Row labels
+    for (let l=0; l<nL; l++) {
+      g.append('text').attr('x',-6).attr('y', l*cellH+cellH/2+4)
+        .attr('text-anchor','end').attr('fill','#888').attr('font-size',9)
+        .text(`L${l}`);
+    }
+
+    setStatus('Residual stream loaded.');
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
+}
+
+// ── Head entropy ───────────────────────────────────────────────────────
+async function runEntropy() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Enter text first.','error'); return; }
+  setStatus('Computing head entropy…','loading');
+  try {
+    const data = await post('/api/entropy', baseBody());
+    const ents = data.entropies;  // [n_layers][n_heads]
+    const nL = data.n_layers, nH = data.n_heads;
+
+    // Normalise across all values
+    const flat = ents.flat();
+    const mn = Math.min(...flat), mx = Math.max(...flat);
+    const norm = v => mx-mn < 1e-8 ? 0 : (v-mn)/(mx-mn);
+
+    const cell = Math.min(40, Math.floor(760 / nH));
+    const mL = 50, mT = 40;
+
+    const svg = d3.select('#entropy-svg')
+      .attr('width',  mL + nH*cell + 20)
+      .attr('height', mT + nL*cell + 20);
+    svg.selectAll('*').remove();
+    const g = svg.append('g').attr('transform',`translate(${mL},${mT})`);
+
+    for (let l=0; l<nL; l++) {
+      for (let h=0; h<nH; h++) {
+        const val = ents[l][h];
+        g.append('rect')
+          .attr('x',h*cell).attr('y',l*cell)
+          .attr('width',cell-1).attr('height',cell-1)
+          .attr('fill', colourHot(norm(val))).attr('rx',2)
+          .on('mousemove', ev => showTip(ev,
+            `L${l} H${h}<br>entropy: ${val.toFixed(3)}<br>${val < (mn+(mx-mn)*0.33) ? 'focused' : val > (mn+(mx-mn)*0.66) ? 'diffuse' : 'moderate'}`))
+          .on('mouseleave', hideTip);
+      }
+    }
+    for (let h=0; h<nH; h++) {
+      g.append('text').attr('x',h*cell+cell/2).attr('y',-6)
+        .attr('text-anchor','middle').attr('fill','#888').attr('font-size',9)
+        .text(`H${h}`);
+    }
+    for (let l=0; l<nL; l++) {
+      g.append('text').attr('x',-6).attr('y',l*cell+cell/2+4)
+        .attr('text-anchor','end').attr('fill','#888').attr('font-size',9)
+        .text(`L${l}`);
+    }
+
+    setStatus(`Head entropy loaded. Low (cool) = focused. High (hot) = diffuse.`);
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
+}
+
+// ── Integrated gradients ───────────────────────────────────────────────
+async function runGradients() {
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Enter text first.','error'); return; }
+  setStatus('Running integrated gradients (30 interpolation steps — ~30s on CPU)…','loading');
+  try {
+    const data = await post('/api/gradients', baseBody());
+    const container = document.getElementById('gradient-bars');
+    container.innerHTML = '';
+
+    const norm = normaliseArr(data.importance);
+    data.tokens.forEach((tok, i) => {
+      const n   = norm[i];
+      const col = colourHot(0.2 + n * 0.8);
+      const item = document.createElement('div');
+      item.className = 'token-bar-item';
+      item.innerHTML = `
+        <div class="token-bar-fill">
+          <div class="token-bar-fill-inner"
+               style="height:${Math.max(2,n*58)}px;background:${col}">
+          </div>
+        </div>
+        <div class="token-label" title="${tok}">${tok}</div>`;
+      item.addEventListener('mousemove', ev => showTip(ev,
+        `${tok}<br>importance: ${data.importance[i].toFixed(4)}`));
+      item.addEventListener('mouseleave', hideTip);
+      container.appendChild(item);
+    });
+
+    setStatus('Integrated gradients complete.');
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
+}
+
+// ── Compare ────────────────────────────────────────────────────────────
 async function runCompare() {
   const text = document.getElementById('input-text').value.trim();
-  if (!text) { setStatus('Please enter text first.', 'error'); return; }
-
-  setStatus('Running comparison (loads two models — may take a moment)…', 'loading');
-
+  if (!text) { setStatus('Enter text first.','error'); return; }
+  setStatus('Running comparison (loads two models)…','loading');
   try {
-    const resp = await fetch('/api/compare', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, discard_ratio: 0.1 })
+    const data = await post('/api/compare', {
+      text, model_names: ['bert-base-uncased','dmis-lab/biobert-base-cased-v1.2'],
+      discard_ratio: 0.1
     });
-    const data = await resp.json();
-
     const grid = document.getElementById('compare-grid');
     grid.innerHTML = '';
 
     for (const [name, result] of Object.entries(data.results)) {
       const col = document.createElement('div');
       col.innerHTML = `<div class="compare-model-label">${result.display}</div>`;
-
-      // Mini bar chart per model
       const bars = document.createElement('div');
       bars.className = 'token-bars';
-      const maxVal = Math.max(...result.cls_attention);
+      const norm = normaliseArr(result.cls_attention);
 
       result.tokens.forEach((tok, i) => {
-        const val  = result.cls_attention[i];
-        const norm = maxVal > 0 ? val / maxVal : 0;
-        const col2 = d3.interpolateBlues(0.2 + norm * 0.8);
-
+        const n   = norm[i];
+        const c   = colourBlue(0.2 + n*0.8);
         const item = document.createElement('div');
         item.className = 'token-bar-item';
         item.innerHTML = `
           <div class="token-bar-fill">
             <div class="token-bar-fill-inner"
-                 style="height:${Math.max(2, norm * 60)}px; background:${col2};"
-                 title="${tok}: ${val.toFixed(4)}">
+                 style="height:${Math.max(2,n*58)}px;background:${c}">
             </div>
           </div>
-          <div class="token-label" title="${tok}">${tok}</div>
-        `;
+          <div class="token-label" title="${tok}">${tok}</div>`;
+        item.addEventListener('mousemove', ev =>
+          showTip(ev, `${tok}<br>${result.cls_attention[i].toFixed(4)}`));
+        item.addEventListener('mouseleave', hideTip);
         bars.appendChild(item);
       });
-
       col.appendChild(bars);
       grid.appendChild(col);
     }
 
-    setStatus('Comparison complete.');
+  const results   = data.results;
+  const modelKeys = Object.keys(results);
+  
+  if (modelKeys.length === 2) {
+    const attn0 = results[modelKeys[0]].cls_attention;
+    const attn1 = results[modelKeys[1]].cls_attention;
+    const n     = Math.min(attn0.length, attn1.length);
+    
+    // Compute normalised difference per token
+    const diffs = [];
+    for (let i = 0; i < n; i++) {
+      diffs.push(Math.abs(attn0[i] - attn1[i]));
+    }
+    const maxDiff = Math.max(...diffs);
 
-  } catch (e) {
-    setStatus(`Error: ${e.message}`, 'error');
+    // Add difference badges to the grid
+    const diffDiv = document.createElement('div');
+    diffDiv.style.cssText = 'grid-column: 1/-1; margin-top:16px;';
+    diffDiv.innerHTML = '<div style="font-size:0.75rem;color:#7c83fd;margin-bottom:8px">TOKEN DIFFERENCE (higher = models disagree more)</div>';
+    
+    const diffBars = document.createElement('div');
+    diffBars.className = 'token-bars';
+    
+    results[modelKeys[0]].tokens.forEach((tok, i) => {
+      if (tok.startsWith('[') || tok.startsWith('<|')) return;
+      const norm = maxDiff > 0 ? diffs[i] / maxDiff : 0;
+      const col  = d3.interpolateOranges(0.2 + norm * 0.8);
+      const item = document.createElement('div');
+      item.className = 'token-bar-item';
+      item.innerHTML = `
+        <div class="token-bar-fill">
+          <div class="token-bar-fill-inner"
+               style="height:${Math.max(2,norm*58)}px;background:${col}">
+          </div>
+        </div>
+        <div class="token-label" title="${tok}">${tok}</div>`;
+      item.addEventListener('mousemove', ev => showTip(ev,
+        `${tok}<br>BERT: ${attn0[i].toFixed(3)}<br>BioBERT: ${attn1[i].toFixed(3)}<br>diff: ${diffs[i].toFixed(3)}`));
+      item.addEventListener('mouseleave', hideTip);
+      diffBars.appendChild(item);
+    });
+    
+    diffDiv.appendChild(diffBars);
+    grid.appendChild(diffDiv);
   }
+  setStatus('Comparison complete.');
+    setStatus('Comparison complete.');
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
+  
 }
 
 // ── Head explorer ──────────────────────────────────────────────────────
 async function runHeads() {
-  const text  = document.getElementById('input-text').value.trim();
-  const model = document.getElementById('model-select').value;
-
-  if (!text) { setStatus('Please enter text first.', 'error'); return; }
-  setStatus('Loading all heads…', 'loading');
-
+  const text = document.getElementById('input-text').value.trim();
+  if (!text) { setStatus('Enter text first.','error'); return; }
+  setStatus('Loading all heads…','loading');
   try {
-    const resp = await fetch('/api/heads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, model_name: model })
-    });
-    const data = await resp.json();
-
+    const data = await post('/api/heads', baseBody());
     const grid = document.getElementById('head-grid');
     grid.innerHTML = '';
+    const miniSz = 6;
 
-    const miniSize = 6;
-
-    for (let l = 0; l < data.n_layers; l++) {
-      for (let h = 0; h < data.n_heads; h++) {
+    for (let l=0; l<data.n_layers; l++) {
+      for (let h=0; h<data.n_heads; h++) {
         const attn = data.attentions[l][h];
         const n    = data.tokens.length;
+
         const cell = document.createElement('div');
         cell.className = 'head-cell';
+        const lbl = document.createElement('div');
+        lbl.className = 'head-label';
+        lbl.textContent = `L${l}H${h}`;
+        cell.appendChild(lbl);
 
-        const label = document.createElement('div');
-        label.className = 'head-label';
-        label.textContent = `L${l}H${h}`;
-        cell.appendChild(label);
-
-        // Mini canvas heatmap
         const canvas = document.createElement('canvas');
-        canvas.width  = n * miniSize;
-        canvas.height = n * miniSize;
+        canvas.width = canvas.height = n * miniSz;
         canvas.style.imageRendering = 'pixelated';
         const ctx = canvas.getContext('2d');
 
-        for (let r = 0; r < n; r++) {
-          for (let c = 0; c < n; c++) {
-            const val = attn[r][c];
-            ctx.fillStyle = d3.interpolateBlues(val);
-            ctx.fillRect(c * miniSize, r * miniSize, miniSize, miniSize);
+        for (let r=0; r<n; r++) {
+          for (let c=0; c<n; c++) {
+            ctx.fillStyle = colourBlue(attn[r][c]);
+            ctx.fillRect(c*miniSz, r*miniSz, miniSz, miniSz);
           }
         }
 
-        // Click to show full view
         canvas.addEventListener('click', () => {
-          const fakeData = {
-            tokens:       data.tokens,
-            attention:    attn,
-            cls_attention: attn[0],
-            mode:         `raw L${l} H${h}`,
-            n_layers:     data.n_layers,
-            n_heads:      data.n_heads,
-          };
-          currentData = fakeData;
-          renderBars(fakeData);
-          renderHeatmap(fakeData);
-          renderArc(fakeData, 0);
-          ['bar', 'heatmap', 'arc'].forEach(id =>
-            document.getElementById(`${id}-mode-badge`).textContent = `raw L${l} H${h}`
-          );
+          const fake = { tokens: data.tokens, attention: attn,
+                         cls_attention: attn[0], mode: `raw L${l} H${h}`,
+                         n_layers: data.n_layers, n_heads: data.n_heads };
+          currentData = fake;
+          renderBars(fake); renderHeatmap(fake); renderArc(fake,0);
+          ['bar','heatmap','arc'].forEach(id =>
+            document.getElementById(id+'-mode-badge').textContent=`raw L${l} H${h}`);
           switchTab('heatmap', document.querySelector('[onclick*="heatmap"]'));
         });
 
@@ -743,32 +902,9 @@ async function runHeads() {
         grid.appendChild(cell);
       }
     }
-
-    setStatus(`Showing ${data.n_layers} layers × ${data.n_heads} heads. Click any cell to enlarge.`);
-
-  } catch (e) {
-    setStatus(`Error: ${e.message}`, 'error');
-  }
+    setStatus(`${data.n_layers} layers x ${data.n_heads} heads loaded. Click any to enlarge.`);
+  } catch(e) { setStatus('Error: '+e.message,'error'); }
 }
-
-// ── Tooltip ────────────────────────────────────────────────────────────
-const tooltip = document.getElementById('tooltip');
-
-function showTooltip(event, html) {
-  tooltip.innerHTML = html;
-  tooltip.style.display = 'block';
-  tooltip.style.left = (event.pageX + 12) + 'px';
-  tooltip.style.top  = (event.pageY + 12) + 'px';
-}
-
-function hideTooltip() { tooltip.style.display = 'none'; }
-
-// ── Layer select visibility ────────────────────────────────────────────
-document.getElementById('mode-select').addEventListener('change', function() {
-  document.getElementById('layer-group').style.display =
-    this.value === 'raw' ? 'flex' : 'none';
-});
-document.getElementById('layer-group').style.display = 'none';
 
 // ── Enter key ──────────────────────────────────────────────────────────
 document.getElementById('input-text').addEventListener('keydown', e => {
