@@ -89,6 +89,11 @@ Browser (D3.js visualisation)
 
 ---
 
+### BERT vs BioBERT — Rollout Comparison
+![Model Comparison](assets/bert_vs_biobert.png)
+*Sentence: "Hepatosplenomegaly with elevated transaminase 
+and hypoalbuminemia"*
+
 ## Known Limitations
 
 - **CLIP's "CLS Attention" is not directly comparable to BERT/BioBERT's.**
