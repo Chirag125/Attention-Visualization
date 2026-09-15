@@ -90,9 +90,23 @@ Browser (D3.js visualisation)
 ---
 
 ### BERT vs BioBERT — Rollout Comparison
-![Model Comparison](assets/bert_vs_biobert.png)
 *Sentence: "Hepatosplenomegaly with elevated transaminase 
 and hypoalbuminemia"*
+<img width="1832" height="862" alt="image" src="https://github.com/user-attachments/assets/27f095fa-ff19-4136-8f06-4a2e9ee3d6a0" />
+Both models use identical WordPiece tokenisation — the 
+difference lies in how attention weight is distributed across 
+the resulting subword fragments. BERT anchors on word boundaries 
+within the compound; BioBERT shows more uniform internal 
+distribution and greater sensitivity to the relational 
+conjunction 'and' connecting the two clinical findings.
+
+### CLS / Pool Token Attention
+<img width="1882" height="846" alt="Screenshot 2026-09-15 233559" src="https://github.com/user-attachments/assets/e128696e-fd30-468f-825d-91ae1a91d394" />
+*Sentence:"The patient shows signs of pneumothorax"*
+
+*Rollout attention (discard ratio 0.5) on BioBERT showing 
+which tokens contribute most to the final sentence embedding.
+
 
 ## Known Limitations
 
