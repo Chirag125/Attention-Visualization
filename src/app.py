@@ -149,27 +149,17 @@ async def get_attention(req: AttentionRequest):
 
 @app.post("/api/compare")
 async def compare_models(req: CompareRequest):
-    """
-    Side-by-side rollout comparison across two models.
-    Used for BERT vs BioBERT view.
-    """
     results = {}
     for name in req.model_names:
-        extractor = get_extractor(name)
-        r         = extractor.get_rollout(
-            req.text, discard_ratio=req.discard_ratio
-        )
+        extractor = get_extractor(name)  # uses cache — no reload
+        r = extractor.get_rollout(req.text, discard_ratio=req.discard_ratio)
         results[name] = {
             "display":       SUPPORTED_MODELS[name]["display"],
             "tokens":        r["tokens"],
             "cls_attention": normalise(r["cls_attention"]),
             "attention":     normalise(r["attention"]),
         }
-
-    return {
-        "text":    req.text,
-        "results": results,
-    }
+    return {"text": req.text, "results": results}
 
 
 @app.post("/api/heads")
